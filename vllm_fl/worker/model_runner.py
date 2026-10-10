@@ -7,6 +7,7 @@
 import functools
 import gc
 import itertools
+import os
 import threading
 import time
 from collections import defaultdict
@@ -288,7 +289,7 @@ if TYPE_CHECKING:
     from vllm.v1.spec_decode.ngram_proposer import NgramProposer
     from vllm.v1.worker.encoder_cudagraph import EncoderCudaGraphManager
 
-logger = init_logger(__name__)
+logger = init_logger("vllm.fl.worker.model_runner")
 
 AttnMetadataDict: TypeAlias = dict[str, AttentionMetadata]
 # list when ubatching is enabled
@@ -4235,6 +4236,20 @@ class ModelRunnerFL(
                 use_cascade_attn=cascade_attn_prefix_lens is not None,
                 num_encoder_reqs=len(scheduler_output.scheduled_encoder_inputs),
             )
+            num_tokens_padded = batch_desc.num_tokens
+
+            if os.environ.get("VLLM_FL_BATCH_TRACE", "0") == "1":
+                logger.info(
+                    "[FL_BATCH] reqs=%d tokens=%d max_query=%d padded_tokens=%d "
+                    "cudagraph=%s batch_desc=%s ubatch=%s",
+                    num_reqs,
+                    num_tokens_unpadded,
+                    max_num_scheduled_tokens,
+                    num_tokens_padded,
+                    cudagraph_mode,
+                    batch_desc,
+                    should_ubatch,
+                )
 
             logger.debug(
                 "Running batch with cudagraph_mode: %s, batch_descriptor: %s, "
@@ -4245,7 +4260,6 @@ class ModelRunnerFL(
                 num_tokens_across_dp,
             )
 
-            num_tokens_padded = batch_desc.num_tokens
             num_reqs_padded = (
                 batch_desc.num_reqs if batch_desc.num_reqs is not None else num_reqs
             )

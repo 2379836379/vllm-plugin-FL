@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM-FL project
 
+import os
 from typing import Any
 
 from vllm.logger import init_logger
 from vllm.v1.core.sched.async_scheduler import AsyncScheduler as _AsyncScheduler
 
-logger = init_logger(__name__)
+logger = init_logger("vllm.fl.worker.scheduler_fl")
 
 
 class _MTPStructuredOutputManager:
@@ -153,3 +154,30 @@ class AsyncSchedulerFL(_AsyncScheduler):
                 "(max_threads=8)."
             )
         super().__init__(*args, **kwargs)
+
+    def schedule(self, throttle_prefills: bool = False):
+        output = super().schedule(throttle_prefills)
+
+        if os.environ.get("VLLM_FL_SCHED_TRACE", "0") == "1":
+            values = list(output.num_scheduled_tokens.values())
+            free_blocks = self.kv_cache_manager.block_pool.get_num_free_blocks()
+            prefix_blocks = output.num_common_prefix_blocks
+            if isinstance(prefix_blocks, (list, tuple)):
+                prefix_blocks = sum(prefix_blocks)
+            logger.info(
+                "[FL_SCHED] step=%d reqs=%d scheduled=%d max_req_tokens=%d "
+                "waiting=%d running=%d preempted=%d prefix_blocks=%d "
+                "kv_usage=%.4f free_blocks=%d",
+                self.current_step,
+                len(values),
+                output.total_num_scheduled_tokens,
+                max(values, default=0),
+                len(self.waiting),
+                len(self.running),
+                len(output.preempted_req_ids),
+                prefix_blocks,
+                self.kv_cache_manager.usage,
+                free_blocks,
+            )
+
+        return output

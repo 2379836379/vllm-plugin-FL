@@ -202,10 +202,7 @@ class WorkerFL(WorkerBase):
         is_driver_worker: bool = False,
     ):
 
-        if (
-            vllm_config.num_speculative_tokens == 1
-            and vllm_config.scheduler_config.async_scheduling
-        ):
+        if vllm_config.scheduler_config.async_scheduling:
             vllm_config.scheduler_config.scheduler_cls = (
                 "vllm_fl.worker.scheduler_fl.AsyncSchedulerFL"
             )
